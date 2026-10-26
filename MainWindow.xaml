@@ -43,6 +43,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Text="Endpoint"
@@ -70,6 +71,17 @@
                         Content="Refresh"
                         Click="Refresh_Click"
                         Padding="18,8"/>
+
+
+                <Button Grid.Column="4"
+                        x:Name="GracefulRestartButton"
+                        Content="Graceful Restart"
+                        Click="GracefulRestartButton_Click"
+                        Padding="18,8"
+                        Margin="8,0,0,0"
+                        Background="#D97706"
+                        Foreground="White"
+                        BorderThickness="0"/>
             </Grid>
         </Border>
 
@@ -130,6 +142,31 @@
                         
 <WrapPanel x:Name="SummaryCards"
            Margin="0,0,0,18"/>
+
+<!-- Dynamic Redfish Action Center -->
+<Border Background="#F0F5FA"
+        BorderBrush="#D9E0EA"
+        BorderThickness="1"
+        CornerRadius="8"
+        Padding="16"
+        Margin="0,0,0,18">
+
+    <StackPanel>
+        <TextBlock Text="AVAILABLE REDFISH ACTIONS"
+                   FontSize="12"
+                   FontWeight="Bold"
+                   Foreground="#52657A"
+                   Margin="0,0,0,10"/>
+
+        <TextBlock x:Name="ActionStatusText"
+                   Text="Select a resource to discover actions."
+                   FontSize="13"
+                   Foreground="#68778D"
+                   Margin="0,0,0,10"/>
+
+        <StackPanel x:Name="ActionListPanel"/>
+    </StackPanel>
+</Border>
 
 <TextBlock Text="RESOURCE PROPERTIES"
            FontSize="12"

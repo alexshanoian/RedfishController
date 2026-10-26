@@ -1,0 +1,223 @@
+
+using System;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using RedfishController.Helpers;
+using RedfishController.Models;
+using System.Collections.Generic;
+using RedfishController.Controllers;
+using RedfishController.Views;
+
+namespace RedfishController
+{
+    public partial class MainWindow : Window
+    {
+        private readonly RedfishController.Controllers.RedfishController
+             _controller = new();
+
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        private async void Connect_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            string endpoint = EndpointBox.Text.Trim().TrimEnd('/');
+
+            try
+            {
+                DetailTitle.Text = "Connecting...";
+                DetailSubtitle.Text = endpoint;
+                RawJsonBox.Text = "Discovering Redfish resources...";
+
+                string json = await _controller.ConnectAsync(endpoint);
+
+                Uri serviceRoot =
+                    _controller.GetResourceUri("/redfish/v1/");
+
+                ResourceTree.Items.Clear();
+
+                var rootNode = new TreeViewItem
+                {
+                    Header = "Redfish Service Root",
+                    Tag = serviceRoot.AbsoluteUri,
+                    IsExpanded = true
+                };
+
+                ResourceTree.Items.Add(rootNode);
+
+                PopulateChildren(rootNode, json);
+
+                ShowJson(
+                    "Redfish Service Root",
+                    serviceRoot.AbsoluteUri,
+                    json);
+            }
+            catch (Exception ex)
+            {
+                DetailTitle.Text = "Connection failed";
+                DetailSubtitle.Text = endpoint;
+                RawJsonBox.Text = ex.Message;
+            }
+        }
+
+        private async void ResourceTree_SelectedItemChanged(
+            object sender,
+            RoutedPropertyChangedEventArgs<object> e)
+        {
+            if (e.NewValue is not TreeViewItem item
+                || item.Tag is not string url
+                || !_controller.IsConnected)
+            {
+                return;
+            }
+
+            try
+            {
+                DetailTitle.Text =
+                    item.Header?.ToString() ?? "Resource";
+
+                DetailSubtitle.Text = url;
+                RawJsonBox.Text = "Loading resource...";
+
+                string json = await _controller.GetResourceAsync(url);
+
+                item.Items.Clear();
+                PopulateChildren(item, json);
+
+                ShowJson(
+                    item.Header?.ToString() ?? "Resource",
+                    url,
+                    json);
+            }
+            catch (Exception ex)
+            {
+                DetailTitle.Text = "Resource request failed";
+                DetailSubtitle.Text = url;
+                RawJsonBox.Text = ex.Message;
+            }
+        }
+
+        private void PopulateChildren(
+            TreeViewItem parent,
+            string json)
+        {
+            List<ResourceLink> links =
+                RedfishParser.GetResourceLinks(json);
+
+            foreach (ResourceLink link in links)
+            {
+                AddResourceNode(
+                    parent,
+                    link.Name,
+                    link.Path);
+            }
+        }
+
+        private void AddResourceNode(
+            TreeViewItem parent,
+            string name,
+            string resourcePath)
+        {
+            if (!_controller.IsConnected)
+                return;
+
+            Uri resourceUri = _controller.GetResourceUri(resourcePath);
+
+            var node = new TreeViewItem
+            {
+                Header = name,
+                Tag = resourceUri.AbsoluteUri
+            };
+
+            // A placeholder makes the node expandable before its
+            // children have been retrieved from the API.
+            node.Items.Add(new TreeViewItem
+            {
+                Header = "Load resource...",
+                IsEnabled = false
+            });
+
+            parent.Items.Add(node);
+        }
+
+        private void ShowJson(
+            string title,
+            string url,
+            string json)
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement root = document.RootElement;
+
+                string version = RedfishParser.GetString(
+                    root, "RedfishVersion");
+
+            DetailTitle.Text = title;
+            DetailSubtitle.Text = !string.IsNullOrEmpty(version)
+                ? $"Redfish {version} | {url}"
+                : url;
+
+            // Clear the previous resource's information.
+            SummaryCards.Children.Clear();
+            PropertyTree.Items.Clear();
+
+            // Add useful summary cards when these fields exist.
+
+            ResourceViewRenderer.AddCard(SummaryCards, 
+                "Health",
+                RedfishParser.GetNestedString(
+                    root, "Status", "Health"));
+
+            ResourceViewRenderer.AddCard(SummaryCards, 
+                "Health Rollup",
+                RedfishParser.GetNestedString(
+                    root, "Status", "HealthRollup"));
+
+            ResourceViewRenderer.AddCard(SummaryCards, 
+                "State",
+                RedfishParser.GetNestedString(
+                    root, "Status", "State"));
+
+            ResourceViewRenderer.AddCard(SummaryCards, 
+                "Power",
+                RedfishParser.GetString(root, "PowerState"));
+
+            ResourceViewRenderer.AddCard(SummaryCards, 
+                "Model",
+                RedfishParser.GetString(root, "Model"));
+
+            ResourceViewRenderer.AddCard(SummaryCards, 
+                "Manufacturer",
+                RedfishParser.GetString(root, "Manufacturer"));
+
+
+            // Build an expandable view of every JSON property.
+            foreach (JsonProperty property in root.EnumerateObject())
+            {
+                PropertyTree.Items.Add(
+                    ResourceViewRenderer.BuildPropertyNode(
+                        property.Name,
+                        property.Value));
+            }
+
+            // Preserve the complete response for troubleshooting.
+            RawJsonBox.Text = JsonSerializer.Serialize(
+                root,
+                new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+        }
+
+        private void Refresh_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            Connect_Click(sender, e);
+        }
+    }
+}
+
