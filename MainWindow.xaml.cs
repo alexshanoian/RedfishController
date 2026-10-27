@@ -10,6 +10,7 @@ using RedfishController.Controllers;
 using RedfishController.Views;
 using System.Net;
 using System.Linq;
+using System.Windows.Media;
 
 namespace RedfishController
 {
@@ -166,9 +167,11 @@ namespace RedfishController
         }
 
 
+        
         private async System.Threading.Tasks.Task ExecuteDiscoveredActionAsync(
             RedfishAction action,
-            Button executeButton)
+            Button executeButton,
+            ComboBox resetTypeDropdown)
         {
             if (!_controller.IsConnected)
             {
@@ -176,19 +179,34 @@ namespace RedfishController
                 return;
             }
 
+            string? selectedResetType =
+                resetTypeDropdown.SelectedItem as string;
+
             if (action.Name != "ComputerSystem.Reset" ||
                 action.Target != "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset" ||
                 !action.Parameters.TryGetValue("ResetType", out var allowedTypes) ||
-                !allowedTypes.Contains("GracefulRestart"))
+                string.IsNullOrWhiteSpace(selectedResetType) ||
+                !allowedTypes.Contains(selectedResetType))
             {
                 MessageBox.Show(
-                    "This action is not yet supported by the Action Center.",
+                    "The selected action or reset type is not supported.",
                     "Unsupported Action");
                 return;
             }
 
+            // Only permit these operations while developing against the emulator.
+            if (selectedResetType != "GracefulRestart" &&
+                selectedResetType != "GracefulShutdown" &&
+                selectedResetType != "On")
+            {
+                MessageBox.Show(
+                    "This reset type is not enabled in the Action Center.",
+                    "Restricted Action");
+                return;
+            }
+
             var confirmation = MessageBox.Show(
-                "Send GracefulRestart to the simulated HPE server?",
+                $"Send {selectedResetType} to the simulated HPE server?",
                 "Confirm Redfish Action",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning);
@@ -202,7 +220,7 @@ namespace RedfishController
             {
                 var result = await _controller.ResetSystemAsync(
                     "/redfish/v1/Systems/1",
-                    "GracefulRestart");
+                    selectedResetType);
 
                 var responseWindow = new ApiResponseWindow(
                     "POST",
@@ -228,6 +246,7 @@ namespace RedfishController
         }
 
 
+
         private void PopulateActions(List<RedfishAction> actions)
         {
             // Remove actions belonging to the previously selected resource.
@@ -249,6 +268,8 @@ namespace RedfishController
                 {
                     Margin = new Thickness(0, 0, 0, 14)
                 };
+
+                ComboBox? resetTypeDropdown = null;
 
                 actionCard.Children.Add(new TextBlock
                 {
@@ -290,8 +311,16 @@ namespace RedfishController
                     if (dropdown.Items.Count > 0)
                         dropdown.SelectedIndex = 0;
 
+                    
                     actionCard.Children.Add(dropdown);
+
+                    if (parameter.Key == "ResetType")
+                        {
+                            resetTypeDropdown = dropdown;
+                        }
+
                 }
+
 
 
                     var executeButton = new Button
@@ -307,9 +336,15 @@ namespace RedfishController
                     };
 
                     executeButton.Click += async (sender, e) =>
-                    {
-                        await ExecuteDiscoveredActionAsync(action, executeButton);
-                    };
+                        {
+                            if (resetTypeDropdown != null)
+                            {
+                                await ExecuteDiscoveredActionAsync(
+                                    action,
+                                    executeButton,
+                                    resetTypeDropdown);
+                            }
+                        };
 
                     actionCard.Children.Add(executeButton);
 
