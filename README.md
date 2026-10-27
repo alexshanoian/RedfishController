@@ -6,9 +6,7 @@ Developed and tested using the HPE iLO Redfish Emulator.
 
 ## Screenshot
 
-![RedfishController Dashboard](screenshots/dashboard.jpg)
 ![RedfishController API Use](screenshots/apiexample.jpg)
-
 
 ## Features
 
